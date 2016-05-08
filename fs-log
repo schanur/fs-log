@@ -1,6 +1,10 @@
 #! /usr/bin/python2.5 -u
 
-import os, sys, hashlib, dircache, time, csv, stat, gtk, pygtk
+import os, sys, hashlib, dircache, time, csv, stat
+#import wx
+#import gtk, pygtk
+#import cProfile
+#import pstats
 from stat import *
 
 
@@ -35,16 +39,34 @@ class FileInfo(object):
             self.__init_attr(file_attributes)
         else:
             raise self.ValidationError(error_code)
-    
+
+    def __check_size(self, size):
+        try:
+            size = int(size)
+        except:
+            return(False)
+        if size < 0:
+            return(False)
+        return(True)
+
+    def __check_modify_date(self, modify_date):
+        try:
+            modify_date = int(modify_date)
+        except:
+            print "cast error"
+            return(False)
+        #print "int_cast: ",int(execution_time)
+        return(modify_date < (int(execution_time)))
+
     def __check_hash(self, hash_string):
         if len(hash_string) == 64:
             for letter in hash_string:
                 if not ((letter >= '0' and letter <= '9')
-                    or (letter >= 'a' and letter <= 'f')): 
+                        or (letter >= 'a' and letter <= 'f')): 
                     return(False)
             return(True)
         return(False)
-        
+    
     def __check_filename(self, filename):
         if len(filename) <= 256:
             for letter in filename:
@@ -63,7 +85,8 @@ class FileInfo(object):
             error_code = 2
         if file_attributes[2] < 0:
             error_code = 3
-        if file_attributes[3] > execution_time:
+        #if int(file_attributes[3]) > int(execution_time):
+        if not self.__check_modify_date(file_attributes[3]):
             error_code = 4
         if not self.__check_hash(file_attributes[4]):
             error_code = 5
@@ -82,6 +105,7 @@ class FileInfo(object):
     # sorting order is: type, name, size, modify_date
     def __lt__(self, cmp_file):
         return(self.get_attr_without_hash() < cmp_file.get_attr_without_hash())
+        #return(self.get_attr_without_mod_hash_and_size() < cmp_file.get_attr_without_mod_hash_and_size())
     def __eq__(self, cmp_file):
         return(self.get_attr_without_hash() == cmp_file.get_attr_without_hash())
     #def __str__(self):
@@ -98,18 +122,19 @@ class FileInfo(object):
 
 def list_sorted(list, reversed=False):
     if len(list) > 1:
-        it_list = iter(list)
-        last_item = iter
-        if reversed:
-            while iter.next():
-                if iter > last_item:
-                    return(False)
-                last_item
-        else:
-            while iter.next():
-                if iter < last_item:
-                    return(False)
-                last_item = iter
+        #it_list = iter(list)
+        first_loop = True
+        for i in list:
+            if first_loop:
+                first_loop = False
+            else:
+                if reversed:
+                    if i > last_item:
+                        return(False)
+                else:
+                    if i < last_item:
+                        return(False)
+            last_item = i
     return(True)
 
 def hash_file(filename):
@@ -151,6 +176,7 @@ def get_dir_list_from_fs(directory):
                                          file_stat[ST_MTIME])))
     if not list_sorted(dir_content):
         dir_content.sort()
+        pass
     return(dir_content)
 
 def get_latest_hist_time(directory):
@@ -160,8 +186,7 @@ def get_latest_hist_time(directory):
             if os.path.isfile(directory + '/' + file) and file.startswith('dirhash_'):
                 file_time = int(file.lstrip('dirhash_'))
                 if (latest_time < file_time):
-                    latest_time = file_time
-    
+                    latest_time = file_time    
     return(latest_time)
 
 def get_dir_list_from_hist_file(directory):
@@ -179,17 +204,21 @@ def get_dir_list_from_hist_file(directory):
                 dir_content.append(new_file_entry)
             except FileInfo.ValidationError, val:
                 print "Validation error in history file"
-                print "  file name: ", hist_file
-                print "  line no:   ", line_number
-                print "  error no:  ", val.error_code
+                print "  file name:    ", hist_file
+                print "  line number:  ", line_number
+                print "  error number: ", val.error_code
+                print "  field dump:"
+                field_no = 1
+                for field in row:
+                    print "    ",field_no,": ",field
+                    field_no += 1
                 raise
             
             line_number += 1
     else:
         print "no history file found in directory: ", directory
-    dir_unsorted = dir_content[:]
-    dir_content.sort()
-    if dir_content != dir_unsorted:
+    if not list_sorted(dir_content):
+        dir_content.sort()
         print "history file in unsorted state"
     return(dir_content)
 
@@ -269,6 +298,7 @@ def update_hist(fs_directory, hist_directory):
         #print " ", diff[0]
         hist_has_changed = True
         hist_length = len(diff[2])
+        hist_pos = 0
         for file in diff[0]:
             if file[0] == FileStatus.new:
                 if file[1].type == FileType.file:
@@ -280,10 +310,8 @@ def update_hist(fs_directory, hist_directory):
                                              + file[1].name).hexdigest()
                 diff[2].append(file[1])
             else:
-                hist_pos = 0
                 #find the right position to erase or update an list item.
                 while (hist_pos < hist_length):
-                    
                     if (file[1].get_attr_without_mod_hash_and_size() == 
                         diff[2][hist_pos].get_attr_without_mod_hash_and_size()):
                         if file[0] == FileStatus.erased:
@@ -303,7 +331,8 @@ def update_hist(fs_directory, hist_directory):
                         break
                     else:
                         hist_pos += 1
-        diff[2].sort()
+        if not list_sorted(diff[2]):
+            diff[2].sort()
     #recursively call the function for every directory
     dir_count = 0
     file_count = 0
@@ -326,11 +355,29 @@ def update_hist(fs_directory, hist_directory):
             file_count += sub_dir[2]
         else:
             file_count += 1
-    write_hist(hist_has_changed, hist_directory, diff[2])    
+    if hist_has_changed:
+        write_hist(hist_has_changed, hist_directory, diff[2])    
     return(hist_has_changed, 
            dir_count, 
            file_count, 
            hash_dir_list(diff[2]).hexdigest())
+
+def check_for_hash_collision(same_hashes):
+    for same in same_hashes:
+        first_file = True
+        for file in same:
+            if first_file:
+                first_file = False
+                size = os.path.getsize(file)
+            elif os.path.getsize(file) != size:
+                print "Found hash collision for sha256!"
+                print "Please contact a cryptography expert near you."
+                print "Files:"
+                print "  ",same[0]
+                print "  ",file
+                #raise
+                    
+    
 
 #find files and directories with same hash value
 def find_same_hashes(directory, min_size, recursion_depth=0, hashes={}, same_hashes={}):
@@ -341,14 +388,16 @@ def find_same_hashes(directory, min_size, recursion_depth=0, hashes={}, same_has
         #if os.path.isfile(directory + '/' + file.name):
             if file.size >= min_size:
                 hash_entry = True
+            #else:
+                #raise ""
         #elif os.path.isdir(directory + '/' + file.name):
         elif file.type == FileType.directory:
             if file.size > 0:
                 hash_entry = True
-                find_same_hashes(directory + '/' + file.name, 
+                find_same_hashes(directory + '/' + file.name,
+                                 min_size,
                                  recursion_depth + 1,
-                                 min_size, 
-                                 hashes, 
+                                 hashes,
                                  same_hashes)
         else:
             print "unknown file type"
@@ -358,8 +407,10 @@ def find_same_hashes(directory, min_size, recursion_depth=0, hashes={}, same_has
                     same_hashes[file.hash] = [hashes[file.hash]]
                 same_hashes[file.hash].append(directory + '/' + file.name)
             else:
-                hashes[file.hash] = file.name
+                hashes[file.hash] = directory + '/' + file.name
     if recursion_depth == 0:
+        #for same in same_hashes:
+            #check_for_hash_collision(same)
         return(same_hashes.items())
     else:
         return()
@@ -372,15 +423,28 @@ def find_same_hashes(directory, min_size, recursion_depth=0, hashes={}, same_has
     #pass
 
 execution_time = str(time.time()).partition('.')[0]
+print "execution time: ",int(execution_time)
 #try:
-summary = update_hist("files", "hist")
+#summary = cProfile.run('update_hist("files", "hist")')
+#summary = update_hist("files", "hist")
 #except Exception:
     #print
     #print "aborted"
-print summary
-#print find_same_hashes("hist", 1)
+#print summary
+same_files = find_same_hashes("hist", 1)
+for i in same_files:
+    print i[0]
+    for file in i[1]:
+        print "  ",file
+print len(same_files)
 
+#cProfile.run('get_dir_list_from_fs("files/list_test")')
 
 #window2 = gtk.Window(gtk.WINDOW_TOPLEVEL)
 #window2.show()
 #gtk.main()
+
+#app = wx.PySimpleApp()
+#frame = wx.Frame(None, wx.ID_ANY, "Hello World")
+#frame.Show(True)
+#app.MainLoop()
