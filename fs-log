@@ -4,7 +4,7 @@ import os, sys, hashlib, dircache, time, csv, stat, gtk, pygtk
 from stat import *
 
 class FileType:
-    file, directory = range(2)
+    directory, file = range(2)
 
 class FileStatus:
     updated, new, erased = range(3)
@@ -21,13 +21,17 @@ class FileStatus:
 #class EntryInfo:
     
 class FileInfo(object):
+    class ValidationError(Exception):
+        def __init__(self, error_code):
+            self.error_code = error_code
+
     def __init__(self, file_attributes, check = False):
         if check == False:
-            self.init(file_attributes)
+            self.__init_attr(file_attributes)
         else:
-            self.check_and_init(file_attributes)
+            self.__check_and_init(file_attributes)
 
-    def init(self, file_attributes):
+    def __init_attr(self, file_attributes):
         self.type = int(file_attributes[0])
         self.name = file_attributes[1]
         self.size = int(file_attributes[2])
@@ -35,16 +39,17 @@ class FileInfo(object):
         if len(file_attributes) == 5:
             self.hash = file_attributes[4]
     
-    def check_and_init(self, file_attributes):
-        if self.__check_hist_file_entry(file_attributes):
-            init(file_attributes)
+    def __check_and_init(self, file_attributes):
+        error_code = self.__check_hist_file_entry(file_attributes)
+        if error_code == 0:    
+            self.__init_attr(file_attributes)
         else:
-            raise "moeoeepp"
+            raise self.ValidationError(error_code)
     
     def __check_hash(self, hash_string):
         if len(hash_string) == 64:
             for letter in hash_string:
-                if ((letter >= '0' and letter <= '9')
+                if not ((letter >= '0' and letter <= '9')
                     or (letter >= 'a' and letter <= 'f')): 
                     return(False)
             return(True)
@@ -59,14 +64,20 @@ class FileInfo(object):
         return(False)
 
     def __check_hist_file_entry(self, file_attributes):
-        if (len(file_attributes) == 5 
-                and int(file_attributes[0]) in range(2)
-                and self.__check_filename(file_attributes[1])
-                and file_attributes[2] >= 0
-                and file_attributes[3] < execution_time
-                and self.__check_hash(file_attributes[4])): 
-            return(True)
-        return(False)
+        error_code = 0
+        if len(file_attributes) != 5:
+            error_code = 8
+        if not (int(file_attributes[0]) in range(2)):
+            error_code = 1
+        if not self.__check_filename(file_attributes[1]):
+            error_code = 2
+        if file_attributes[2] < 0:
+            error_code = 3
+        if file_attributes[3] > execution_time:
+            error_code = 4
+        if not self.__check_hash(file_attributes[4]):
+            error_code = 5
+        return(error_code)
 
     def get_attr_without_mod_and_hash(self):
         return(self.type, self.name, self.size)
@@ -93,7 +104,7 @@ class FileInfo(object):
 #bla = file_info(1, 2, 3, 4)
 
 def hash_file(filename):
-    block_size= 2 ** 16
+    block_size = 2 ** 16
     print "filename: ", filename,
     file_to_hash = open(filename, 'rb')
     file_stat = os.fstat(file_to_hash.fileno())
@@ -112,22 +123,23 @@ def get_dir_list_from_fs(directory):
     dir_content = []
     #file_type, file_size
     #a = dir
-    for file in os.listdir(directory):
-        file_stat = os.stat(directory + '/' + file)
-        if S_ISDIR(file_stat[ST_MODE]):
-            file_type = FileType.directory
-            file_size = 0
-            #new_dir = directory
-        elif S_ISREG(file_stat[ST_MODE]):
-            file_type = FileType.file
-            file_size = file_stat[ST_SIZE]
-        else:
-            print "unsupported filetype: ", file
-            continue
-        dir_content.append(FileInfo((file_type,
-                                    file,
-                                    file_size,
-                                    file_stat[ST_MTIME])))
+    if os.path.isdir(directory):
+        for file in os.listdir(directory):
+            file_stat = os.stat(directory + '/' + file)
+            if S_ISDIR(file_stat[ST_MODE]):
+                file_type = FileType.directory
+                file_size = 0
+                #new_dir = directory
+            elif S_ISREG(file_stat[ST_MODE]):
+                file_type = FileType.file
+                file_size = file_stat[ST_SIZE]
+            else:
+                print "unsupported filetype: ", file
+                continue
+            dir_content.append(FileInfo((file_type,
+                                         file,
+                                         file_size,
+                                         file_stat[ST_MTIME])))
     dir_content.sort()
     return(dir_content)
 
@@ -145,16 +157,24 @@ def get_latest_hist_time(directory):
 def get_dir_list_from_hist_file(directory):
     dir_content = []
     hist_time = get_latest_hist_time(directory)
+    hist_file = directory + '/' + "dirhash_" + str(hist_time)
     if hist_time != 0:
-        hist_reader = csv.reader(open(directory + '/' + "dirhash_" + str(hist_time), "rb"),
+        hist_reader = csv.reader(open(hist_file, "rb"),
                                  delimiter='>',
                                  quoting=csv.QUOTE_NONE)
+        line_number = 1
         for row in hist_reader:
             try:                
                 new_file_entry = FileInfo(row, True)
-            except String:
-                print "moeoeepp"
-            dir_content.append(new_file_entry)
+                dir_content.append(new_file_entry)
+            except FileInfo.ValidationError, val:
+                print "Validation error in history file"
+                print "  file name: ", hist_file
+                print "  line no:   ", line_number
+                print "  error no:  ", val.error_code
+                raise
+            
+            line_number += 1
     else:
         print "no history file found in directory: ", directory
     dir_unsorted = dir_content[:]
@@ -171,7 +191,7 @@ def compare_dir(fs_directory, hist_directory):
     while (dir_pos < len(dir_content)) and (hist_pos < len(hist_content)):
         #compare file attributes without hash and modify date
         dir_entry = (dir_content[dir_pos].type, dir_content[dir_pos].name)
-        hist_entry = (hist_content[hist_pos].type, dir_content[hist_pos].name)
+        hist_entry = (hist_content[hist_pos].type, hist_content[hist_pos].name)
         print dir_entry, ' ', hist_entry, ' ',
         if dir_entry == hist_entry:
             print "="
@@ -233,7 +253,10 @@ def write_hist(has_changed, hist_directory, file_list):
         #create filesystem link to the last version
         #pass
 
+#def update_hist_for_sub_dirs()
+
 def update_hist(fs_directory, hist_directory):
+    hist_has_changed = False
     print 'a'
     diff = compare_dir(fs_directory, hist_directory)
     print 'b'
@@ -243,10 +266,7 @@ def update_hist(fs_directory, hist_directory):
         for e in diff[i]:
             print e
     print ""
-    if len(diff[0]) == 0:
-        print 'c'
-        hist_has_changed = False
-    else:
+    if len(diff[0]) != 0:
         print 'd'
         hist_has_changed = True
         hist_length = len(diff[2])
@@ -279,10 +299,9 @@ def update_hist(fs_directory, hist_directory):
                             diff[2][hist_pos] = file[1]
                             if diff[2][hist_pos].type == FileType.file:
                                 #only hash files. not directories
-                                zugj
                                 diff[2][hist_pos].hash = hash_file(fs_directory
                                                          + '/'
-                                                         + new_entry[1]).hexdigest()
+                                                         + diff[2][hist_pos].name).hexdigest()
                         else:
                             print "unknown file status"
                         break
@@ -303,8 +322,9 @@ def update_hist(fs_directory, hist_directory):
                 sub_dir_has_changed = True
             elif sub_dir[3] != file.hash:
                 sub_dir_has_changed = True
-            if sub_dir_has_changed == True:
+            if sub_dir_has_changed:
                 #sub directory is new or content has changed
+                file.size = sub_dir[1] + sub_dir[2]
                 file.hash = sub_dir[3]
                 hist_has_changed = True
             dir_count += sub_dir[1]
@@ -330,9 +350,12 @@ def update_hist(fs_directory, hist_directory):
 #block_size = 2 ** 16
 execution_time = str(time.time()).partition('.')[0]
 #print execution_time
+#try:
 summary = update_hist("files", "hist")
-
-#print summary
+#except Exception:
+#    print
+#    print "aborted"
+print summary
 #write_hist(sys.argv[1], sys.argv[2])
 
 
