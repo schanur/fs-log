@@ -186,8 +186,8 @@ def get_dir_list_from_fs(directory):
     else:
         raise
     if not list_sorted(dir_content):
+        print "directory content in unsorted state" 
         dir_content.sort()
-        pass
     return(dir_content)
 
 def get_latest_hist_time(directory):
@@ -234,6 +234,22 @@ def get_dir_list_from_hist_file(directory):
     return(dir_content)
 
 def compare_dir(fs_directory, hist_directory):
+    dir_content = get_dir_list_from_fs(fs_directory)
+    hist_content = get_dir_list_from_hist_file(hist_directory)
+    diff = []
+    dir_pos = hist_pos = 0
+    dir_it = iter(dir_content)
+    hist_it = iter(hist_content)
+    if len(dir_content) > 0 and len(hist_content):
+        dir_item = dir_it.next()
+        hist_item = hist_it.next()
+    for dir_item in dir_content:
+        
+
+    raise
+    
+
+def compare_dir_old(fs_directory, hist_directory):
     dir_content = get_dir_list_from_fs(fs_directory)
     hist_content = get_dir_list_from_hist_file(hist_directory)
     diff = []
@@ -425,6 +441,8 @@ def group_same_hashes(same_hashes):
         if same[1][0][0] == FileType.directory:
             for same_file in same[1]:
                 pass
+
+
 
 
 
