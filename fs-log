@@ -1,165 +1,341 @@
-#! /usr/bin/python2.5
+#! /usr/bin/python2.5 -u
 
-import os, sys, hashlib, dircache, time, csv, stat
+import os, sys, hashlib, dircache, time, csv, stat, gtk, pygtk
 from stat import *
 
+class FileType:
+    file, directory = range(2)
+
+class FileStatus:
+    updated, new, erased = range(3)
+    #def __init__(self):
+        
+    #def to_string(cls, file_type):
+    #    for known_file_type in cls.__dict__:
+    #        if known_file_type[1] == file_type:
+    #            return(known_file_type[0][0:0])
+    #def to_type(cls, file_string):
+    #    for known_file_type in cls.__dict__:
+    #        if known_file_type[]
+        
+#class EntryInfo:
+    
+class FileInfo(object):
+    def __init__(self, file_attributes, check = False):
+        if check == False:
+            self.init(file_attributes)
+        else:
+            self.check_and_init(file_attributes)
+
+    def init(self, file_attributes):
+        self.type = int(file_attributes[0])
+        self.name = file_attributes[1]
+        self.size = int(file_attributes[2])
+        self.modify_date = int(file_attributes[3])
+        if len(file_attributes) == 5:
+            self.hash = file_attributes[4]
+    
+    def check_and_init(self, file_attributes):
+        if self.__check_hist_file_entry(file_attributes):
+            init(file_attributes)
+        else:
+            raise "moeoeepp"
+    
+    def __check_hash(self, hash_string):
+        if len(hash_string) == 64:
+            for letter in hash_string:
+                if ((letter >= '0' and letter <= '9')
+                    or (letter >= 'a' and letter <= 'f')): 
+                    return(False)
+            return(True)
+        return(False)
+        
+    def __check_filename(self, filename):
+        if len(filename) <= 256:
+            for letter in filename:
+                if letter == '/':
+                    return(False)
+            return(True)
+        return(False)
+
+    def __check_hist_file_entry(self, file_attributes):
+        if (len(file_attributes) == 5 
+                and int(file_attributes[0]) in range(2)
+                and self.__check_filename(file_attributes[1])
+                and file_attributes[2] >= 0
+                and file_attributes[3] < execution_time
+                and self.__check_hash(file_attributes[4])): 
+            return(True)
+        return(False)
+
+    def get_attr_without_mod_and_hash(self):
+        return(self.type, self.name, self.size)
+    def get_attr_without_hash(self):
+        return(self.type, self.name, self.size, self.modify_date)
+    def get_attr(self):
+        return(self.type, self.name, self.size, self.modify_date, self.hash)
+    # allows sorting and comparing of the dir lists
+    # sorting order is: type, name, size, modify_date
+    def __lt__(self, cmp_file):
+        return(self.get_attr_without_hash() < cmp_file.get_attr_without_hash())
+    def __eq__(self, cmp_file):
+        return(self.get_attr_without_hash() == cmp_file.get_attr_without_hash())
+    #def __str__(self):
+    #    return(get_attr())
+    def __repr__(self):
+        attr_string = ""
+        for attr in self.get_attr_without_hash():
+            attr_string += str(attr) + ',,'
+        return(attr_string)
+#def __getattr__
+    #def __main__(self):
+    #    return(get_attr())
+#bla = file_info(1, 2, 3, 4)
+
 def hash_file(filename):
-	print "filename: ", filename,
-	file_to_hash = open(filename, 'rb')
-	file_stat = os.fstat(file_to_hash.fileno())
-	blocks = file_stat[stat.ST_SIZE] / block_size + 1
-	print "; size: ", file_stat[stat.ST_SIZE],
-	hash = hashlib.sha256()
-	start_time = time.time()
-	while blocks > 0:
-		blocks -= 1
-		hash.update(file_to_hash.read(block_size))
-	print "; time: ", time.time() - start_time
-	return(hash)
+    block_size= 2 ** 16
+    print "filename: ", filename,
+    file_to_hash = open(filename, 'rb')
+    file_stat = os.fstat(file_to_hash.fileno())
+    blocks = file_stat[stat.ST_SIZE] / block_size + 1
+    print "; size: ", file_stat[stat.ST_SIZE],
+    hash = hashlib.sha256()
+    start_time = time.time()
+    while blocks > 0:
+        blocks -= 1
+        hash.update(file_to_hash.read(block_size))
+    print "; time: ", time.time() - start_time
+    return(hash)
 
 def get_dir_list_from_fs(directory):
-	#print directory
-	dir_content = []
-	for file in os.listdir(directory):
-		file_stat = os.stat(directory + '/' + file)
-		if S_ISDIR(file_stat[ST_MODE]):
-			file_type = 'd'
-			new_dir = directory
-		elif S_ISREG(file_stat[ST_MODE]):
-			file_type = 'f'
-		else:
-			print "unsupported filetype: ", file
-			continue
-		dir_content.append([file_type,
-				file,
-				file_stat[ST_SIZE],
-				file_stat[ST_MTIME]])
-		dir_content.sort()
-	return(dir_content)
+    #print directory
+    dir_content = []
+    #file_type, file_size
+    #a = dir
+    for file in os.listdir(directory):
+        file_stat = os.stat(directory + '/' + file)
+        if S_ISDIR(file_stat[ST_MODE]):
+            file_type = FileType.directory
+            file_size = 0
+            #new_dir = directory
+        elif S_ISREG(file_stat[ST_MODE]):
+            file_type = FileType.file
+            file_size = file_stat[ST_SIZE]
+        else:
+            print "unsupported filetype: ", file
+            continue
+        dir_content.append(FileInfo((file_type,
+                                    file,
+                                    file_size,
+                                    file_stat[ST_MTIME])))
+    dir_content.sort()
+    return(dir_content)
 
 def get_latest_hist_time(directory):
-	latest_time = 0
-	for file in os.listdir(directory):
-		if file.startswith('dirhash_'):
-			file_time = int(file.lstrip('dirhash_'))
-			if (latest_time < file_time):
-				latest_time = file_time
-	return(latest_time)
+    latest_time = 0
+    if os.path.isdir(directory):
+        for file in os.listdir(directory):
+            if os.path.isfile(directory + '/' + file) and file.startswith('dirhash_'):
+                file_time = int(file.lstrip('dirhash_'))
+                if (latest_time < file_time):
+                    latest_time = file_time
+    
+    return(latest_time)
 
 def get_dir_list_from_hist_file(directory):
-	dir_content = []
-	hist_time = get_latest_hist_time(directory)
-	if (hist_time != 0):
-		hist_reader = csv.reader(open(directory + '/' + "dirhash_" + str(hist_time), "rb"),
-				delimiter='>',
-				quoting=csv.QUOTE_NONE)
-		for row in hist_reader:
-			if row[0] == 'd':
-				row_length = 4
-			elif row[0] == 'f':
-				row_length = 5
-			else:
-				print "unknown entry type in history file"
-				print row
-			if len(row) == row_length:
-				dir_content.append(row)
-			else:
-				print "wrong entry length in history file"
-				print row
-	else:
-		print "no history file found in directory: ", directory
-	dir_unsorted = dir_content[:]
-	dir_content.sort()
-	if dir_content != dir_unsorted:
-		print "history file in unsorted state"
-	return(dir_content)
+    dir_content = []
+    hist_time = get_latest_hist_time(directory)
+    if hist_time != 0:
+        hist_reader = csv.reader(open(directory + '/' + "dirhash_" + str(hist_time), "rb"),
+                                 delimiter='>',
+                                 quoting=csv.QUOTE_NONE)
+        for row in hist_reader:
+            try:                
+                new_file_entry = FileInfo(row, True)
+            except String:
+                print "moeoeepp"
+            dir_content.append(new_file_entry)
+    else:
+        print "no history file found in directory: ", directory
+    dir_unsorted = dir_content[:]
+    dir_content.sort()
+    if dir_content != dir_unsorted:
+        print "history file in unsorted state"
+    return(dir_content)
 
 def compare_dir(fs_directory, hist_directory):
-	dir_content = get_dir_list_from_fs(fs_directory)
-	hist_content = get_dir_list_from_hist_file(hist_directory)
-	diff = []
-	dir_pos = hist_pos = 0
-	while (dir_pos < len(dir_content)) & (hist_pos < len(hist_content)):
-		if dir_content[dir_pos][0:2] == hist_content[hist_pos][0:2]:
-			if dir_content[dir_pos][3] > hist_content[hist_pos][3]:
-				diff.append(('u', dir_content[dir_pos]))
-			hist_pos += 1
-			dir_pos += 1
-		elif dir_content[dir_pos][0:2] < hist_content[hist_pos][0:2]:
-			diff.append(('n', dir_content[dir_pos]))
-			dir_pos += 1
-		else:
-			diff.append(('e', hist_content[hist_pos]))
-			hist_pos += 1
-	for file in dir_content[dir_pos:]:
-		diff.append(('n', file))
-	for file in hist_content[hist_pos:]:
-		diff.append(('e', file))
-	return(diff, dir_content, hist_content)
+    dir_content = get_dir_list_from_fs(fs_directory)
+    hist_content = get_dir_list_from_hist_file(hist_directory)
+    diff = []
+    dir_pos = hist_pos = 0
+    while (dir_pos < len(dir_content)) and (hist_pos < len(hist_content)):
+        #compare file attributes without hash and modify date
+        dir_entry = (dir_content[dir_pos].type, dir_content[dir_pos].name)
+        hist_entry = (hist_content[hist_pos].type, dir_content[hist_pos].name)
+        print dir_entry, ' ', hist_entry, ' ',
+        if dir_entry == hist_entry:
+            print "="
+            #check if modify date of the file is newer than the entry in the history file
+            if dir_content[dir_pos].modify_date > hist_content[hist_pos].modify_date:
+                diff.append((FileStatus.updated, dir_content[dir_pos]))
+            hist_pos += 1
+            dir_pos += 1
+        #check if the file is new on the filesystem
+        elif dir_entry < hist_entry:
+            print "<"
+            diff.append((FileStatus.new, dir_content[dir_pos]))
+            dir_pos += 1
+            
+        #file has been erased.
+        else:
+            print ">"
+            diff.append((FileStatus.erased, hist_content[hist_pos]))
+            hist_pos += 1
+    for file in dir_content[dir_pos:]:
+        diff.append((FileStatus.new, file))
+    for file in hist_content[hist_pos:]:
+        diff.append((FileStatus.erased, file))
+    return(diff, dir_content, hist_content)
 
-#def update_entry(diff_entry):
-#	if diff_entry[0] == 'n':
-#		pass
+def hash_dir_list(dir_list):
+    hash = hashlib.sha256()
+    for dir_entry in dir_list:
+        #hash all file attributes without modification date
+        hash.update(str(dir_entry.type))
+        hash.update(dir_entry.name)
+        hash.update(str(dir_entry.size))
+        hash.update(dir_entry.hash)
+    return(hash)
+
+def write_hist(has_changed, hist_directory, file_list):
+    hist_filename = "dirhash_" + str(execution_time)
+    if os.path.isdir(hist_directory) == False:
+        os.makedirs(hist_directory)
+        last_hist_time = 0
+    else:
+        last_hist_time = get_latest_hist_time(hist_directory)
+
+    if os.path.isfile(hist_directory + '/' + hist_filename) == True:
+        print "error. history file exists: ", hist_filename
+    #elif has_changed == True or last_hist_time == 0:
+    else:    
+        #write new history file
+        hist_file = open(hist_directory + '/' + hist_filename, 'a')
+        hist_file.close()
+        hist_writer = csv.writer(open(
+                hist_directory + '/' + hist_filename, "wb"),
+                delimiter='>',
+                quoting=csv.QUOTE_NONE)
+        #print file_list
+        for file in file_list:
+            hist_writer.writerow(file.get_attr())
+    #else:
+        #create filesystem link to the last version
+        #pass
 
 def update_hist(fs_directory, hist_directory):
-	diff = compare_dir(fs_directory, hist_directory)
-	print diff
-	if len(diff[0]) == 0:
-		return(False, [])
-	#new_hist = []
-	hist_length = len(diff[2])
-	for file in diff[0]:
-		hist_pos = 0
-		
-		if file[0] == 'n':
-			diff[2].append(file[1].append(hash_file(
-					fs_directory
-					+ '/'
-					+ file[1][1])))
-		else:
-			while (hist_pos < hist_length):
-				if file[1][0:2] == diff[2][hist_pos][0:2]:
-					if file[0] == 'e':
-						del diff[2][hist_pos]
-						hist_length -= 1
-						break
-					elif file[O] == 'u':
-						diff[2][hist_pos] = file[1].append(
-								hash_file(
-								fs_directory
-								+ '/'
-								+ file[1][1]))
-					else:
-						print "unknown diff statement: ", file[O]
-	diff[2].sort()
-	return(True, diff[2])
+    print 'a'
+    diff = compare_dir(fs_directory, hist_directory)
+    print 'b'
+    print fs_directory, ' ', hist_directory
+    for i in range(3):
+        print "diff ", i
+        for e in diff[i]:
+            print e
+    print ""
+    if len(diff[0]) == 0:
+        print 'c'
+        hist_has_changed = False
+    else:
+        print 'd'
+        hist_has_changed = True
+        hist_length = len(diff[2])
+        for file in diff[0]:
+            print 'e'
+            if file[0] == FileStatus.new:
+                if file[1].type == FileType.file:
+                    #only calculate hash for files.
+                    #directories will be handled recursively at
+                    #the end.
+                    file[1].hash = hash_file(fs_directory
+                                             + '/'
+                                             + file[1].name).hexdigest()
+                diff[2].append(file[1])
+            else:
+                print 'i'
+                hist_pos = 0
+                #find the right position to erase or update an list item.
+                while (hist_pos < hist_length):
+                    #print 'j'
+                    if (file[1].get_attr_without_mod_and_hash() == 
+                        diff[2][hist_pos].get_attr_without_mod_and_hash()):
+                        if file[0] == FileStatus.erased:
+                            #erase from new history file
+                            del diff[2][hist_pos]
+                            hist_length -= 1
+                        elif file[0] == FileStatus.updated:
+                            #update entry
+                            print 'n'
+                            diff[2][hist_pos] = file[1]
+                            if diff[2][hist_pos].type == FileType.file:
+                                #only hash files. not directories
+                                zugj
+                                diff[2][hist_pos].hash = hash_file(fs_directory
+                                                         + '/'
+                                                         + new_entry[1]).hexdigest()
+                        else:
+                            print "unknown file status"
+                        break
+                    else:
+                        hist_pos += 1
+        diff[2].sort()
+    
+    #recursively call the function for every directory
+    dir_count = 0
+    file_count = 0
+    for file in diff[2]:
+        if file.type == FileType.directory:
+            dir_count += 1
+            sub_dir = update_hist(fs_directory + '/' + file.name,
+                                  hist_directory + '/' + file.name)
+            sub_dir_has_changed = False
+            if hasattr(file, "hash") == False:
+                sub_dir_has_changed = True
+            elif sub_dir[3] != file.hash:
+                sub_dir_has_changed = True
+            if sub_dir_has_changed == True:
+                #sub directory is new or content has changed
+                file.hash = sub_dir[3]
+                hist_has_changed = True
+            dir_count += sub_dir[1]
+            file_count += sub_dir[2]
+        else:
+            file_count += 1
+    write_hist(hist_has_changed, hist_directory, diff[2])
+    return(hist_has_changed, 
+           dir_count, 
+           file_count, 
+           hash_dir_list(diff[2]).hexdigest())
 
-def write_hist(fs_directory, hist_directory):
-	new_hist = update_hist(fs_directory, hist_directory)
-	if new_hist[0] == True:
-		hist_filename = "dirhash_" + str(execution_time)
-		if os.path.isfile(hist_directory + '/' + hist_filename) == True:
-			print "error. history file exists: ", hist_filename
-		else:
-			hist_file = open(hist_directory + '/' + hist_filename, 'a')
-			hist_file.close()
-		hist_writer = csv.writer(open(
-				hist_directory + '/' + hist_filename, "wb"),
-				delimiter='>',
-				quoting=csv.QUOTE_NONE)
-		hist_writer.writerows(new_hist[1])
-	else:
-		
-		print "nothing has changed"
 
 
 
-if len(sys.argv[1:]) != 3:
-	#print 'error'
-	#sys.exit(1)
-	pass
 
-block_size = 2 ** 16
+
+#if len(sys.argv[1:]) != 3:
+    #xsyprint 'error'
+    #sys.exit(1)
+    #pass
+
+#block_size = 2 ** 16
 execution_time = str(time.time()).partition('.')[0]
+#print execution_time
+summary = update_hist("files", "hist")
 
-write_hist(sys.argv[1], sys.argv[2])
+#print summary
+#write_hist(sys.argv[1], sys.argv[2])
+
+
+#window2 = gtk.Window(gtk.WINDOW_TOPLEVEL)
+#window2.show()
+#gtk.main()
