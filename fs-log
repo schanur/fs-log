@@ -417,7 +417,7 @@ def group_same_hashes(same_hashes):
     for same_files in same_hashes:
         if same[1][0][0] == FileType.directory:
             for same_file in same[1]:
-            
+                
 
 
 #if len(sys.argv[1:]) != 3:
