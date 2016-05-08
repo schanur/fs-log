@@ -412,11 +412,11 @@ def find_same_hashes(directory, min_size, recursion_depth=0, hashes={}, same_has
     else:
         return()
 
-def group_same_hashes(same_hashes):
-    grouped_hashes={}
-    for same_files in same_hashes:
-        if same[1][0][0] == FileType.directory:
-            for same_file in same[1]:
+#def group_same_hashes(same_hashes):
+#    grouped_hashes={}
+#    for same_files in same_hashes:
+#        if same[1][0][0] == FileType.directory:
+#            for same_file in same[1]:
                 
 
 
@@ -426,13 +426,19 @@ def group_same_hashes(same_hashes):
     #pass
 
 execution_time = str(time.time()).partition('.')[0]
-print "execution time: ",int(execution_time)
+print "execution time:",int(execution_time)
+print "arguments:"
+for i in range(len(sys.argv)):
+    print "arg", i, sys.argv[i]
+print
 #try:
     #summary = update_hist("files", "hist")
     #summary = update_hist("/media/fs_hist", "hist")
     #print summary
 
 same_files = find_same_hashes("hist", int(sys.argv[1]))
+
+
 for i in same_files:
     print i[0]
     for file in i[1]:
