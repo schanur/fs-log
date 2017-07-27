@@ -13,7 +13,7 @@ class FileType:
 
 class FileStatus:
     updated, new, erased = range(3)
-    
+
 class FileInfo(object):
     class ValidationError(Exception):
         def __init__(self, error_code):
@@ -32,10 +32,10 @@ class FileInfo(object):
         self.modify_date = int(file_attributes[3])
         if len(file_attributes) == 5:
             self.hash = file_attributes[4]
-    
+
     def __check_and_init(self, file_attributes):
         error_code = self.__check_hist_file_entry(file_attributes)
-        if error_code == 0:    
+        if error_code == 0:
             self.__init_attr(file_attributes)
         else:
             raise self.ValidationError(error_code)
@@ -62,11 +62,11 @@ class FileInfo(object):
         if len(hash_string) == 64:
             for letter in hash_string:
                 if not ((letter >= '0' and letter <= '9')
-                        or (letter >= 'a' and letter <= 'f')): 
+                        or (letter >= 'a' and letter <= 'f')):
                     return(False)
             return(True)
         return(False)
-    
+
     def __check_filename(self, filename):
         if len(filename) <= 256:
             for letter in filename:
@@ -100,13 +100,13 @@ class FileInfo(object):
         return(self.type, self.name, self.size, self.modify_date)
     def get_attr(self):
         return(self.type, self.name, self.size, self.modify_date, self.hash)
-    
+
     # allows sorting and comparing of the dir lists
     # sorting order is: type, name, size, modify_date
     def __lt__(self, cmp_file):
         #return(self.get_attr_without_hash() < cmp_file.get_attr_without_hash())
-        
-        #if self.type == cmp_file.type:    
+
+        #if self.type == cmp_file.type:
         #    if self.name < cmp_file.name:
         #        return(True)
         #else:
@@ -186,7 +186,7 @@ def get_dir_list_from_fs(directory):
     else:
         raise
     if not list_sorted(dir_content):
-        print "directory content in unsorted state" 
+        print "directory content in unsorted state"
         dir_content.sort()
     return(dir_content)
 
@@ -197,7 +197,7 @@ def get_latest_hist_time(directory):
             if os.path.isfile(directory + '/' + file) and file.startswith('dirhash_'):
                 file_time = int(file.lstrip('dirhash_'))
                 if (latest_time < file_time):
-                    latest_time = file_time    
+                    latest_time = file_time
     return(latest_time)
 
 def get_dir_list_from_hist_file(directory):
@@ -210,7 +210,7 @@ def get_dir_list_from_hist_file(directory):
                                  quoting=csv.QUOTE_NONE)
         line_number = 1
         for row in hist_reader:
-            try:                
+            try:
                 new_file_entry = FileInfo(row, True)
                 dir_content.append(new_file_entry)
             except FileInfo.ValidationError, val:
@@ -224,7 +224,7 @@ def get_dir_list_from_hist_file(directory):
                     print "    ",field_no,": ",field
                     field_no += 1
                 raise
-            
+
             line_number += 1
     else:
         print "no history file found in directory: ", directory
@@ -244,10 +244,10 @@ def compare_dir(fs_directory, hist_directory):
         dir_item = dir_it.next()
         hist_item = hist_it.next()
     for dir_item in dir_content:
-        
+
 
     raise
-    
+
 
 def compare_dir_old(fs_directory, hist_directory):
     dir_content = get_dir_list_from_fs(fs_directory)
@@ -268,7 +268,7 @@ def compare_dir_old(fs_directory, hist_directory):
         elif dir_entry < hist_entry:
             diff.append((FileStatus.new, dir_content[dir_pos]))
             dir_pos += 1
-            
+
         #file has been erased.
         else:
             diff.append((FileStatus.erased, hist_content[hist_pos]))
@@ -300,7 +300,7 @@ def write_hist(has_changed, hist_directory, file_list):
     if os.path.isfile(hist_directory + '/' + hist_filename) == True:
         print "error. history file exists: ", hist_filename
     #elif has_changed == True or last_hist_time == 0:
-    else:    
+    else:
         #write new history file
         hist_file = open(hist_directory + '/' + hist_filename, 'a')
         hist_file.close()
@@ -383,10 +383,10 @@ def update_hist(fs_directory, hist_directory):
         else:
             file_count += 1
     if hist_has_changed:
-        write_hist(hist_has_changed, hist_directory, diff[2])    
-    return(hist_has_changed, 
-           dir_count, 
-           file_count, 
+        write_hist(hist_has_changed, hist_directory, diff[2])
+    return(hist_has_changed,
+           dir_count,
+           file_count,
            hash_dir_list(diff[2]).hexdigest())
 
 def check_for_hash_collision(same_hashes):
@@ -403,8 +403,8 @@ def check_for_hash_collision(same_hashes):
                 print "  ",same[0]
                 print "  ",file
                 #raise
-                    
-    
+
+
 
 #find files and directories with same hash value
 def find_same_hashes(directory, min_size, same_hashes, hashes={}, recursion_depth=0):
